@@ -41,9 +41,8 @@ export class DexieCloudDB extends Dexie {
     }
 
     this.version(1).stores({
-      // string id (UUID) recommended with Dexie Cloud
-      logs: 'id, createdAt, level',
-      writings: 'id, title, createdAt, updatedAt',
+      logs: '++autoId, created_at',
+      writings: 'id, created_at, category, *search_terms',
     })
   }
 
@@ -60,7 +59,7 @@ export class DexieCloudDB extends Dexie {
 }
 
 // Default instance without cloud (host apps can create their own with cloud)
-export const db = new DexieCloudDB('shared-db')
+export const db = new DexieCloudDB('shared-app-database')
 
 // Helper to create a cloud-enabled instance for host apps
 export function createCloudDB(config: CloudConfig, name = 'shared-db') {
