@@ -4,6 +4,8 @@ The Dexie database for several projects.
 
 ## TODO
 
+- Don't use `logs` table. Just store the last 100 logs in `localStorage` on that device.
+
 - Walkthrough Dexie Cloud setup for database and syncing.
   - Get it connected to your Dexie Cloud account.
 - Create and organize `logs` table code based on `self-pilot-app` usage.
@@ -11,40 +13,52 @@ The Dexie database for several projects.
 - Test creating `search_terms` for writiings.
   - Natural: <https://www.npmjs.com/package/natural?activeTab=readme>
 
-## Schemas
-
 ```ts
-// Logs
-export const logEntrySchema = z.object({
-  autoId: z.number().optional(), // PK auto-incremented by Dexie
-  created_at: z.iso.datetime(),
-  level: z.enum(['Info', 'Warning', 'Error', 'Debug']),
-  label: z.string(),
-  details: z.any(),
-})
+import Dexie, { type Table } from 'dexie'
+import dexieCloud, { type DexieCloudTable } from 'dexie-cloud-addon'
+import { type LogEntry, type WritingEntry } from './schemas'
 
-export type LogEntry = z.infer<typeof logEntrySchema>
+class SelfPilotDatabase extends Dexie {
+  logs!: Table<LogEntry, number, Omit<LogEntry, 'id'>>
+  writings!: DexieCloudTable<WritingEntry, 'id'>
 
-// Writings
-export const writingEntrySchema = z.object({
-  id: z.uuid(),
-  created_at: z.iso.datetime(),
-  updated_at: z.iso.datetime(),
-  category: z.enum([
-    'Journaling',
-    'Weekly Review',
-    'Yearly Review',
-    'Goals & Planning',
-    'Brainstorming',
-    'Creative',
-    'Other',
-  ]),
-  subject: z.string().min(1).max(100),
-  body: z.string().min(1).max(10000),
-  search_terms: z.array(z.string()),
-})
+  constructor() {
+    super('SelfPilotDatabase', { addons: [dexieCloud] })
 
-export type WritingEntry = z.infer<typeof writingEntrySchema>
+    this.version(1).stores({
+      logs: '++id, created_at',
+      writings: '@id, created_at, category, *search_terms',
+    })
+
+    this.cloud.configure({
+      databaseUrl: import.meta.env.VITE_DB_URL,
+      requireAuth: true,
+    })
+  }
+}
+
+export const db = new SelfPilotDatabase()
+
+function defineWritingsApi(db: SelfPilotDatabase) {
+  return {
+    //
+    addWriting: async (writing: Omit<WritingEntry, 'id' | 'created_at'>) => {
+      const id = crypto.randomUUID()
+      await db.writings.add({
+        ...writing,
+        id,
+        created_at: new Date().toISOString(),
+      })
+      return id
+    },
+    //
+    deleteWriting: async (id: string) => {
+      await db.writings.delete(id)
+    },
+  }
+}
+
+export const writingsApi = defineWritingsApi(db)
 ```
 
 ## Final Steps
