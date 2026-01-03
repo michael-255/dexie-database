@@ -4,7 +4,15 @@ The Dexie database for several projects.
 
 ## TODO
 
-- Don't use `logs` table. Just store the last 100 logs in `localStorage` on that device.
+**Notes:** Mess around more with Dexie Cloud and take notes of what you'll need to do to set it up
+for other projects.
+
+- How can I reuse a specific DB in another project?
+- How do I generate the `dexie-cloud.key` for an existing DB and project?
+- How to use `realmId` so data is linked to a specific user
+- How to use `realmId` to share data between users when you want too
+
+**Setup Dexie Cloud Database Module**
 
 - Walkthrough Dexie Cloud setup for database and syncing.
   - Get it connected to your Dexie Cloud account.
@@ -39,26 +47,41 @@ class SelfPilotDatabase extends Dexie {
 
 export const db = new SelfPilotDatabase()
 
-function defineWritingsApi(db: SelfPilotDatabase) {
+// --------------------------------
+
+export function useLogs() {
+  function addLog() {
+    // db.logs.add({ ... } )
+  }
+
+  function getLogs() {
+    // db.logs.where(...).toArray()
+  }
+
   return {
-    //
-    addWriting: async (writing: Omit<WritingEntry, 'id' | 'created_at'>) => {
-      const id = crypto.randomUUID()
-      await db.writings.add({
-        ...writing,
-        id,
-        created_at: new Date().toISOString(),
-      })
-      return id
-    },
-    //
-    deleteWriting: async (id: string) => {
-      await db.writings.delete(id)
-    },
+    addLog,
+    getLogs,
+    // etc...
   }
 }
 
-export const writingsApi = defineWritingsApi(db)
+// --------------------------------
+
+export function useWritings() {
+  function addWriting() {
+    // db.writings.add({ ... } )
+  }
+
+  function deleteWriting() {
+    // db.writings.delete(id)
+  }
+
+  return {
+    addWriting,
+    deleteWriting,
+    // etc...
+  }
+}
 ```
 
 ## Final Steps

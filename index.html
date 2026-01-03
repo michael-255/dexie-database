@@ -4,10 +4,384 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dexie Database Test Harness</title>
+    <title>Dexie Cloud Writings</title>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/test-harness.ts"></script>
+    <div class="container">
+      <header>
+        <h1>Dexie Cloud Writings</h1>
+        <div class="row">
+          <span id="userLabel" class="muted">Signed out</span>
+          <button id="loginBtn">Login</button>
+          <button id="logoutBtn" class="secondary" style="display: none">Logout</button>
+        </div>
+      </header>
+      <section id="authRequired" style="display: none">
+        <h2>New Writing</h2>
+        <form id="newWritingForm">
+          <label>Subject</label>
+          <input id="subjectInput" placeholder="Subject" required />
+          <label>Category</label>
+          <select id="categorySelect" required>
+            <option value="Journaling">Journaling</option>
+            <option value="Weekly Review">Weekly Review</option>
+            <option value="Yearly Review">Yearly Review</option>
+            <option value="Goals & Planning">Goals & Planning</option>
+            <option value="Brainstorming">Brainstorming</option>
+            <option value="Creative">Creative</option>
+            <option value="Other" selected>Other</option>
+          </select>
+          <label>Body</label>
+          <textarea id="bodyInput" rows="4" placeholder="Write something..." required></textarea>
+          <label>Search Terms (comma separated)</label>
+          <input id="termsInput" placeholder="term1, term2" />
+          <div class="row">
+            <button id="addBtn" type="button">Add</button>
+            <button type="reset" class="secondary">Clear</button>
+          </div>
+        </form>
+        <h2>Writings</h2>
+        <ul id="writingsList"></ul>
+      </section>
+      <!-- Custom Login Overlay -->
+      <div id="loginOverlay" style="display: none">
+        <div class="fullscreen darken"></div>
+        <div class="fullscreen dlg-outer">
+          <div class="dlg-inner">
+            <h2 id="loginTitle">Sign In</h2>
+            <div id="loginAlerts"></div>
+            <form id="loginForm">
+              <div id="loginFields"></div>
+              <div class="row">
+                <button id="loginSubmitBtn" type="submit">Continue</button>
+                <button id="loginCancelBtn" type="button" class="secondary" style="display: none">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 2rem;
+        background: #0b0f14;
+        color: #e8f0fe;
+      }
+      .container {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 0.5rem 0.8rem;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #374151;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 0.5rem;
+        margin: 0.25rem 0 0.75rem;
+        border-radius: 6px;
+        border: 1px solid #1f2937;
+        background: #0f172a;
+        color: #e8f0fe;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+      }
+      li {
+        background: #0f172a;
+        border: 1px solid #1f2937;
+        padding: 0.75rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+      }
+      .muted {
+        color: #9ca3af;
+      }
+      .pill {
+        display: inline-block;
+        background: #1f2937;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 12px;
+        margin-left: 0.5rem;
+      }
+      /* Overlay styling */
+      .fullscreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+      .darken {
+        opacity: 0.5;
+        background-color: #000;
+        z-index: 150;
+        backdrop-filter: blur(2px);
+      }
+      .dlg-outer {
+        z-index: 160;
+        align-items: center;
+        display: flex;
+        justify-content: center;
+      }
+      .dlg-inner {
+        position: relative;
+        color: #e8f0fe;
+        background-color: #0f172a;
+        padding: 24px;
+        max-width: 90%;
+        max-height: 90%;
+        overflow-y: auto;
+        border: 1px solid #1f2937;
+        border-radius: 8px;
+        box-shadow: 0 0 40px 4px #000;
+        width: 480px;
+      }
+      #loginAlerts p {
+        margin: 0.25rem 0;
+      }
+      #loginFields label {
+        display: block;
+        margin-bottom: 0.5rem;
+      }
+    </style>
+    <script type="module">
+      console.log('[ui] script loaded')
+      import { db, addWriting, deleteWriting, listWritings } from '/src/writings.ts'
+      const loginBtn = document.getElementById('loginBtn')
+      const logoutBtn = document.getElementById('logoutBtn')
+      const userLabel = document.getElementById('userLabel')
+      const authRequired = document.getElementById('authRequired')
+      const newWritingForm = document.getElementById('newWritingForm')
+      const addBtn = document.getElementById('addBtn')
+      const writingsList = document.getElementById('writingsList')
+      const loginOverlay = document.getElementById('loginOverlay')
+      const loginTitle = document.getElementById('loginTitle')
+      const loginAlerts = document.getElementById('loginAlerts')
+      const loginForm = document.getElementById('loginForm')
+      const loginFields = document.getElementById('loginFields')
+      const loginSubmitBtn = document.getElementById('loginSubmitBtn')
+      const loginCancelBtn = document.getElementById('loginCancelBtn')
+      console.debug('[ui] elements', {
+        loginBtn,
+        logoutBtn,
+        userLabel,
+        authRequired,
+        newWritingForm,
+        addBtn,
+        writingsList,
+        loginOverlay,
+      })
+      let loginParams = {}
+      function renderLoginUI(ui) {
+        if (!ui) {
+          loginOverlay.style.display = 'none'
+          return
+        }
+        loginOverlay.style.display = 'block'
+        loginTitle.textContent = ui.title || 'Sign In'
+        loginAlerts.innerHTML = ''
+        ui.alerts?.forEach((alert) => {
+          const p = document.createElement('p')
+          p.textContent = typeof alert === 'string' ? alert : alert?.text || ''
+          loginAlerts.appendChild(p)
+        })
+        loginFields.innerHTML = ''
+        loginParams = {}
+        Object.entries(ui.fields || {}).forEach(([name, field]) => {
+          const label = document.createElement('label')
+          const span = document.createElement('span')
+          span.textContent = field.label || name
+          const input = document.createElement('input')
+          input.type = field.type || 'text'
+          input.placeholder = field.placeholder || ''
+          input.name = name
+          input.addEventListener('input', (e) => {
+            loginParams[name] = e.target.value
+          })
+          label.appendChild(span)
+          label.appendChild(input)
+          loginFields.appendChild(label)
+        })
+        loginSubmitBtn.textContent = ui.submitLabel || 'Continue'
+        loginCancelBtn.style.display = ui.cancelLabel ? 'inline-block' : 'none'
+        if (ui.cancelLabel) loginCancelBtn.textContent = ui.cancelLabel
+        const onSubmit = ui.onSubmit
+        const onCancel = ui.onCancel
+        loginForm.onsubmit = (ev) => {
+          ev.preventDefault()
+          onSubmit?.(loginParams)
+        }
+        loginCancelBtn.onclick = () => {
+          onCancel?.()
+        }
+      }
+      db.cloud.userInteraction.subscribe(renderLoginUI)
+      // Attach add listener early and expose handler
+      async function handleAdd() {
+        console.debug('[ui] handleAdd start')
+        const addBtnEl = document.getElementById('addBtn')
+        addBtnEl?.setAttribute('disabled', 'true')
+        try {
+          const subject = document.getElementById('subjectInput').value.trim()
+          const category = document.getElementById('categorySelect').value
+          const body = document.getElementById('bodyInput').value.trim()
+          const termsRaw = document.getElementById('termsInput').value
+          const search_terms = termsRaw
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+          console.debug('[ui] handleAdd values', { subject, category, body, search_terms })
+          if (!subject || !body || !category) {
+            alert('Please fill subject, category and body.')
+            return
+          }
+          const created_at = new Date().toISOString()
+          const updated_at = created_at
+          await addWriting({ subject, category, body, search_terms, created_at, updated_at })
+          try {
+            await db.cloud.push()
+          } catch (e) {
+            console.warn('Push failed, will retry in background', e)
+          }
+          newWritingForm.reset()
+          await refreshList()
+        } catch (err) {
+          console.error('Add writing error', err)
+          alert('Failed to add writing. See console.')
+        } finally {
+          addBtnEl?.removeAttribute('disabled')
+        }
+      }
+
+      if (addBtn) {
+        addBtn.addEventListener('click', () => {
+          console.debug('[ui] add button clicked')
+          handleAdd().catch((e) => console.error('Add click failed', e))
+        })
+        console.debug('[ui] add button listener attached')
+      } else {
+        console.error('[ui] add button not found')
+      }
+      function setSignedInUI(user) {
+        const signedIn = !!user
+        userLabel.textContent = signedIn
+          ? user?.displayName || user?.email || 'Signed in'
+          : 'Signed out'
+        loginBtn.style.display = signedIn ? 'none' : 'inline-block'
+        logoutBtn.style.display = signedIn ? 'inline-block' : 'none'
+        authRequired.style.display = signedIn ? 'block' : 'none'
+      }
+      async function refreshList() {
+        // Ensure we have latest data from cloud
+        try {
+          await db.cloud.sync()
+        } catch (e) {
+          console.warn('Sync failed (will still show local data)', e)
+        }
+        const items = await listWritings()
+        console.debug('Writings count:', items.length, items)
+        writingsList.innerHTML = ''
+        if (!items.length) {
+          const empty = document.createElement('li')
+          empty.className = 'muted'
+          empty.textContent = 'No writings yet.'
+          writingsList.appendChild(empty)
+          return
+        }
+        for (const w of items) {
+          const li = document.createElement('li')
+          li.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap: 0.5rem;">
+              <div>
+                <strong>${w.subject ?? '(untitled)'}</strong>
+                ${w.category ? `<span class="pill">${w.category}</span>` : ''}
+                <div class="muted">${new Date(w.created_at).toLocaleString()}</div>
+                ${Array.isArray(w.search_terms) && w.search_terms.length ? `<div class="muted">terms: ${w.search_terms.join(', ')}</div>` : ''}
+              </div>
+              <button data-id="${w.id}" class="deleteBtn">Delete</button>
+            </div>
+          `
+          writingsList.appendChild(li)
+        }
+        writingsList.querySelectorAll('.deleteBtn').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            const id = e.currentTarget.getAttribute('data-id')
+            if (!id) return
+            await deleteWriting(id)
+            await refreshList()
+          })
+        })
+      }
+      loginBtn.addEventListener('click', async () => {
+        try {
+          await db.cloud.login()
+        } catch (err) {
+          console.error('Login error', err)
+          alert('Login failed. See console.')
+        }
+      })
+      logoutBtn.addEventListener('click', async () => {
+        try {
+          await db.cloud.logout()
+        } catch (err) {
+          console.error('Logout error', err)
+          alert('Logout failed. See console.')
+        }
+      })
+      db.cloud.currentUser.subscribe(async (user) => {
+        setSignedInUI(user)
+        if (user) {
+          await db.cloud.sync()
+          await refreshList()
+        } else {
+          writingsList.innerHTML = ''
+        }
+      })
+      db.on('changes', async () => {
+        await refreshList()
+      })
+
+      newWritingForm.addEventListener('submit', async (e) => {
+        console.debug('[ui] submit handler invoked')
+        e.preventDefault()
+        e.stopPropagation()
+        await handleAdd()
+      })
+
+      // (Add button listener attached above after elements)
+
+      // Refresh when window regains focus (handy after mobile login redirect)
+      window.addEventListener('focus', () => {
+        refreshList().catch(() => {})
+      })
+    </script>
   </body>
 </html>

@@ -15,10 +15,25 @@ class WritingDatabase extends Dexie {
     })
 
     this.cloud.configure({
+      unsyncedTables: ['logs'],
       databaseUrl: import.meta.env.VITE_DB_URL,
       requireAuth: true,
+      customLoginGui: true,
     })
   }
 }
 
 export const db = new WritingDatabase()
+
+// Writings helpers
+export async function addWriting(entry: Omit<WritingEntry, 'id'>) {
+  return db.writings.add(entry)
+}
+
+export async function deleteWriting(id: WritingEntry['id']) {
+  return db.writings.delete(id)
+}
+
+export async function listWritings() {
+  return db.writings.toArray()
+}
